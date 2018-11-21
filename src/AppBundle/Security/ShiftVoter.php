@@ -2,8 +2,10 @@
 // src/AppBundle/Security/ShiftVoter.php
 namespace AppBundle\Security;
 
+use AppBundle\Entity\Membership;
 use AppBundle\Entity\Shift;
 use AppBundle\Entity\User;
+use AppBundle\Service\ShiftService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\AccessDecisionManagerInterface;
@@ -19,16 +21,22 @@ class ShiftVoter extends Voter
     private $decisionManager;
     private $container;
 
-    public function __construct(ContainerInterface $container,AccessDecisionManagerInterface $decisionManager)
+    /**
+     * @var ShiftService
+     */
+    private $shiftService;
+
+    public function __construct(ContainerInterface $container, AccessDecisionManagerInterface $decisionManager)
     {
         $this->container = $container;
         $this->decisionManager = $decisionManager;
+        $this->shiftService = $container->get("shift_service");
     }
 
     protected function supports($attribute, $subject)
     {
         // if the attribute isn't one we support, return false
-        if (!in_array($attribute, array(self::BOOK,self::DISMISS,self::REJECT,self::FREE,self::ACCEPT))) {
+        if (!in_array($attribute, array(self::BOOK, self::DISMISS, self::REJECT, self::FREE, self::ACCEPT))) {
             return false;
         }
 
@@ -45,7 +53,7 @@ class ShiftVoter extends Voter
         $user = $token->getUser();
 
         if (!$user instanceof User) {  // the user must be logged in; if not, deny access
-            if (!in_array($attribute, array(self::REJECT,self::ACCEPT))) //accept and reject can be done without login
+            if (!in_array($attribute, array(self::REJECT, self::ACCEPT))) //accept and reject can be done without login
                 return false;
             else
                 $user = null;
@@ -66,7 +74,7 @@ class ShiftVoter extends Voter
                 if ($this->decisionManager->decide($token, array('ROLE_ADMIN'))) {
                     return true;
                 }
-                return $this->canBook($shift, $user);
+                return $this->shiftService->isShiftBookable($shift, $user->getBeneficiary());
             case self::FREE:
                 if ($this->decisionManager->decide($token, array('ROLE_ADMIN'))) {
                     return true;
@@ -92,20 +100,6 @@ class ShiftVoter extends Voter
         throw new \LogicException('This code should not be reached!');
     }
 
-    private function canBook(Shift $shift, User $user)
-    {
-        if ($user->isWithdrawn())
-            return false;
-        if ($user->getFrozen())
-            return false;
-        foreach ($user->getBeneficiaries() as $beneficiary){
-            $bool = $user->canBook($beneficiary,$shift);
-            if ($bool)
-                return true;
-        }
-        return false;
-    }
-
     private function canDismiss(Shift $shift, User $user)
     {
         if ($shift->getIsDismissed()) {
@@ -117,7 +111,7 @@ class ShiftVoter extends Voter
         if ($shift->getIsPast()) {
             return false;
         }
-        if ($user->getBeneficiaries()->contains($shift->getShifter())) {
+        if ($user->getBeneficiary() === $shift->getShifter()) {
             return true;
         }
         return false;
@@ -126,15 +120,15 @@ class ShiftVoter extends Voter
     private function canReject(Shift $shift, User $user = null)
     {
         if ($user instanceof User) {  // the user is logged in
-            return $user->getBeneficiaries()->contains($shift->getLastShifter());
+            return $user->getBeneficiary() === $shift->getLastShifter();
         } // the user is not logged in
         $token = $this->container->get('request_stack')->getCurrentRequest()->get('token');
-        if ($shift->getId()){
-            if ($shift->getLastShifter()){
-                if ($token == $shift->getTmpToken($shift->getLastShifter()->getId())){
+        if ($shift->getId()) {
+            if ($shift->getLastShifter()) {
+                if ($token == $shift->getTmpToken($shift->getLastShifter()->getId())) {
                     return true;
                 }
-            }else{
+            } else {
                 return false;
             }
         }
@@ -143,7 +137,7 @@ class ShiftVoter extends Voter
 
     private function canAccept(Shift $shift, User $user = null)
     {
-        return $this->canReject($shift,$user);
+        return $this->canReject($shift, $user);
     }
 
 

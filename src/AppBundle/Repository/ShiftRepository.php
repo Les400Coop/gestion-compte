@@ -1,6 +1,7 @@
 <?php
 
 namespace AppBundle\Repository;
+use AppBundle\Entity\Shift;
 
 /**
  * ShiftRepository
@@ -11,7 +12,7 @@ namespace AppBundle\Repository;
 class ShiftRepository extends \Doctrine\ORM\EntityRepository
 {
 
-    public function findFutures($roles)
+    public function findFutures()
     {
         $qb = $this->createQueryBuilder('s');
 
@@ -25,11 +26,37 @@ class ShiftRepository extends \Doctrine\ORM\EntityRepository
             ->getResult();
     }
 
+    public function findFuturesWithJob($job,\DateTime $max = null)
+    {
+        $qb = $this->createQueryBuilder('s');
+
+        $qb
+            ->join('s.job', "job")
+            ->where('s.start > :now')
+            ->andwhere('job.id = :jid')
+            ->setParameter('now', new \Datetime('now'))
+            ->setParameter('jid', $job->getId());
+
+        if ($max){
+            $qb
+                ->andWhere('s.end < :max')
+                ->setParameter('max', $max);
+        }
+
+        $qb->orderBy('s.start', 'ASC');
+
+        return $qb
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findFrom(\DateTime $from,\DateTime $max = null)
     {
         $qb = $this->createQueryBuilder('s');
 
         $qb
+            ->select('s, f')
+            ->leftJoin('s.formation', 'f')
             ->where('s.start > :from')
             ->setParameter('from', $from);
         if ($max){
@@ -106,9 +133,9 @@ class ShiftRepository extends \Doctrine\ORM\EntityRepository
 
         $qb
             ->join('s.shifter', "ben")
-            ->join('ben.user', "user")
-            ->where('user.firstShiftDate is NULL')
-            ->addOrderBy('user.id', 'ASC')
+            ->join('ben.membership', "m")
+            ->where('m.firstShiftDate is NULL')
+            ->addOrderBy('m.id', 'ASC')
             ->addOrderBy('s.start', 'ASC');
 
         return $qb
@@ -137,4 +164,27 @@ class ShiftRepository extends \Doctrine\ORM\EntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * @param Shift $shift
+     * @return mixed
+     */
+    public function findAlreadyBookedShiftsOfBucket(Shift $shift)
+    {
+        $qb = $this->createQueryBuilder('s');
+        $qb
+            ->where('s.job = :job')
+            ->andwhere('s.start = :start')
+            ->andwhere('s.end = :end')
+            ->andWhere('s.shifter is not null')
+            ->andWhere('s.isDismissed = false')
+            ->setParameter('job', $shift->getJob())
+            ->setParameter('start', $shift->getStart())
+            ->setParameter('end', $shift->getEnd());
+
+        return $qb
+            ->getQuery()
+            ->getResult();
+    }
+
 }

@@ -31,11 +31,11 @@ class ShiftBucket
         $this->shifts[] = $shift;
     }
 
-    static private function compareShifts(Shift $a, Shift $b, Beneficiary $beneficiary = null)
+    static public function compareShifts(Shift $a, Shift $b, Beneficiary $beneficiary = null)
     {
-        if (!$beneficiary){
-            if (!$a->getRole()){
-                if (!$b->getRole()) {
+        if (!$beneficiary) {
+            if (!$a->getFormation()) {
+                if (!$b->getFormation()) {
                     if (!$a->getShifter()) {
                         if (!$b->getShifter()) {
                             return 0;
@@ -49,14 +49,14 @@ class ShiftBucket
                             return $a->getBookedTime() < $b->getBookedTime();
                         }
                     }
-                }else {
+                } else {
                     return 1;
                 }
-            }else{
-                if (!$b->getRole())
+            } else {
+                if (!$b->getFormation())
                     return -1;
                 else
-                    return $a->getRole()->getId() < $b->getRole()->getId();
+                    return $a->getFormation()->getId() < $b->getFormation()->getId();
             }
         }
         if ($a->getLastShifter() && $a->getLastShifter()->getId() == $beneficiary->getId()) {
@@ -80,16 +80,13 @@ class ShiftBucket
         }
     }
 
-    public function getShifts(Beneficiary $beneficiary = null)
+    public function getShifts()
     {
-        if (!$beneficiary)
-            return $this->shifts;
-        $bookableShifts = $this->getBookableShifts($beneficiary);
-        $bookableIntersectRoles = ShiftBucket::shiftIntersectRoles($bookableShifts, $beneficiary->getRoles());
-        return $this->shifts->filter(ShiftBucket::createShiftFilterCallback($bookableIntersectRoles));
+        return $this->shifts;
     }
 
-    public function getShifterCount(){
+    public function getShifterCount()
+    {
         $bookedShifts = $this->getShifts()->filter(function (Shift $shift) {
             return ($shift->getShifter() != NULL);
         });
@@ -99,18 +96,12 @@ class ShiftBucket
     public function getSortedShifts()
     {
         $iterator = $this->getShifts()->getIterator();
-        $iterator->uasort(function (Shift $a, Shift $b)  {
+        $iterator->uasort(function (Shift $a, Shift $b) {
             return ShiftBucket::compareShifts($a, $b);
         });
         $sorted = new \Doctrine\Common\Collections\ArrayCollection(iterator_to_array($iterator));
         return $sorted->isEmpty() ? null : $sorted;
 
-    }
-
-
-    public function getShiftsCount(Beneficiary $beneficiary = null)
-    {
-        return count($this->getShifts($beneficiary));
     }
 
     public function getFirst()
@@ -145,124 +136,62 @@ class ShiftBucket
         });
     }
 
-    private function getBookableShifts(Beneficiary $beneficiary = null)
-    {
-        if (!$beneficiary) {
-            $bookableShifts = $this->shifts->filter(function (Shift $shift) {
-                return ($shift->getIsDismissed() || !$shift->getShifter()); //dismissed or free
-            });
-        } else {
-            $user = $beneficiary->getUser();
-            if ($this->canBookInterval($beneficiary))
-            {
-                $bookableShifts = $this->shifts->filter(function (Shift $shift) use ($user, $beneficiary) {
-                    return $user->canBook($beneficiary,$shift);
-                });
-            }
-            else
-            {
-                $bookableShifts = new ArrayCollection();
-            }
-        }
-        return $bookableShifts;
-    }
-
-    public function isBookable(Beneficiary $beneficiary = null)
-    {
-        return $this->getBookableShiftsCount($beneficiary) > 0;
-    }
-
-    /***
-     * Renvoie le premier shift bookable.
-     */
-    public function getFirstBookable(Beneficiary $beneficiary = null)
-    {
-        if ($beneficiary && $this->isBookable($beneficiary)) {
-            $bookableShifts = $this->getBookableShifts($beneficiary);
-            $iterator = ShiftBucket::filterByRoles($bookableShifts, $beneficiary->getRoles())->getIterator();
-            $iterator->uasort(function (Shift $a, Shift $b) use ($beneficiary) {
-                return ShiftBucket::compareShifts($a, $b, $beneficiary);
-            });
-            $sorted = new \Doctrine\Common\Collections\ArrayCollection(iterator_to_array($iterator));
-            return $sorted->isEmpty() ? null : $sorted->first();
-        } else {
-            return null;
-        }
-    }
-
-    /***
-     * Renvoie le nombre de shits bookable.
-     */
-    public function getBookableShiftsCount(Beneficiary $beneficiary = null)
-    {
-        $bookableShifts = $this->getBookableShifts($beneficiary);
-        if (!$beneficiary)
-            return count($bookableShifts);
-        return count(ShiftBucket::filterByRoles($bookableShifts, $beneficiary->getRoles()));
-    }
-
     public function getIntervalCode()
     {
         return $this->shifts[0]->getIntervalCode();
     }
 
     /**
-     * Return true if the intersection between $roles and
-     * the shifts' roles is not empty.
+     * Return true if the intersection between $formations and
+     * the shifts' formations is not empty.
      */
-    static private function shiftIntersectRoles($shifts, $roles)
+    static public function shiftIntersectFormations($shifts, $formations)
     {
-        $roleIds = [];
-        foreach ($roles as $role)
-        {
-            $roleIds[] = $role->getId();
+        $formationsIds = [];
+        foreach ($formations as $formation) {
+            $formationsIds[] = $formation->getId();
         }
 
-        $roleInRoleIdsCallback = function ($key, Shift $shift) use($roleIds)
-        {
-            $role = $shift->getRole();
-            return !$role ? false : in_array($role->getId(), $roleIds);
+        $formationInFormationIdsCallback = function ($key, Shift $shift) use ($formationsIds) {
+            $formation = $shift->getFormation();
+            return !$formation ? false : in_array($formation->getId(), $formationsIds);
         };
 
-        return $shifts->exists($roleInRoleIdsCallback);
+        return $shifts->exists($formationInFormationIdsCallback);
     }
 
     /**
-     * Renvoie une collection filtrée en fonction des rôles.
-     * 
-     * Si un des shifts a un rôle qui appartient à $roles,
-     * on renvoie seulement les shifts qui ont un rôle.
-     * 
-     * Sinon, on renvoie seulement les shifts qui n'ont pas de rôle.
+     * Renvoie une collection filtrée en fonction des formations.
+     *
+     * Si un des shifts a une formation qui appartient à $formations,
+     * on renvoie seulement les shifts qui ont un formation.
+     *
+     * Sinon, on renvoie seulement les shifts qui n'ont pas de formation.
      */
-    static private function filterByRoles($shifts, $roles)
+    static public function filterByFormations($shifts, $formations)
     {
-        $intersectionNotEmpty = ShiftBucket::shiftIntersectRoles($shifts, $roles);
+        $intersectionNotEmpty = ShiftBucket::shiftIntersectFormations($shifts, $formations);
         $filterCallback = ShiftBucket::createShiftFilterCallback($intersectionNotEmpty);
         return $shifts->filter($filterCallback);
     }
 
     /**
-     * If $withRoles, return a callback which returns true if the
-     * shift has a role.
-     * 
+     * If $withFormations, return a callback which returns true if the
+     * shift has a formation.
+     *
      * Else, return a callback which return true if the shift
-     * doesn't have a role.
+     * doesn't have a formation.
      */
-    static private function createShiftFilterCallback($withRoles)
+    static public function createShiftFilterCallback($withFormations)
     {
-        if ($withRoles)
-        {
-            return function(Shift $shift)
-            {
-                if ($shift->getRole())
+        if ($withFormations) {
+            return function (Shift $shift) {
+                if ($shift->getFormation())
                     return true;
             };
-        }
-        else {
-            return function(Shift $shift)
-            {
-                if (!$shift->getRole())
+        } else {
+            return function (Shift $shift) {
+                if (!$shift->getFormation())
                     return true;
             };
         }

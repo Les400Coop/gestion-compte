@@ -51,14 +51,14 @@ class SearchUserFormHelper {
                 'Renseigné' => 2,
                 'Non renseigné' => 1,
             )))
-            ->add('roles',EntityType::class, array(
-                'class' => 'AppBundle:Role',
+            ->add('formations', EntityType::class, array(
+                'class' => 'AppBundle:Formation',
                 'choice_label'     => 'name',
                 'multiple'     => true,
                 'required' => false,
                 'label'=>'Avec le(s) Role(s)'
             ))
-            ->add('or_and_exp_roles', ChoiceType::class, array('label' => 'Tous ?','required' => true,'choices'  => array(
+            ->add('or_and_exp_formations', ChoiceType::class, array('label' => 'Tous ?','required' => true,'choices'  => array(
                 'Au moins un role' => 1,
                 'Tous ces roles' => 2,
             )))
@@ -69,8 +69,8 @@ class SearchUserFormHelper {
                 'required' => false,
                 'label'=>'Dans la/les commissions(s)'
             ))
-            ->add('not_roles',EntityType::class, array(
-                'class' => 'AppBundle:Role',
+            ->add('not_formations',EntityType::class, array(
+                'class' => 'AppBundle:Formation',
                 'choice_label'     => 'name',
                 'multiple'     => true,
                 'required' => false,
@@ -95,9 +95,10 @@ class SearchUserFormHelper {
     }
 
     public function initSearchQuery($doctrineManager){
-        $qb = $doctrineManager->getRepository("AppBundle:User")->createQueryBuilder('o');
+        $qb = $doctrineManager->getRepository("AppBundle:Membership")->createQueryBuilder('o');
         $qb = $qb->leftJoin("o.beneficiaries", "b")->addSelect("b")
             ->leftJoin("o.lastRegistration", "lr")->addSelect("lr")
+            ->leftJoin("b.user", "u")->addSelect("u")
             ->leftJoin("o.registrations", "r")->addSelect("r");
         $qb = $qb->andWhere('o.member_number > 0'); //do not include admin user
         return $qb;
@@ -109,7 +110,7 @@ class SearchUserFormHelper {
                 ->setParameter('withdrawn', $form->get('withdrawn')->getData()-1);
         }
         if ($form->get('enabled')->getData() > 0){
-            $qb = $qb->andWhere('o.enabled = :enabled')
+            $qb = $qb->andWhere('u.enabled = :enabled')
                 ->setParameter('enabled', $form->get('enabled')->getData()-1);
         }
         if ($form->get('frozen')->getData() > 0){
@@ -180,10 +181,10 @@ class SearchUserFormHelper {
         if ($form->get('username')->getData()){
             $list  = explode(',',$form->get('username')->getData());
             if (count($list)>1){
-                $qb = $qb->andWhere('o.username IN (:usernames)')
+                $qb = $qb->andWhere('u.username IN (:usernames)')
                     ->setParameter('usernames', $list);
             }else{
-                $qb = $qb->andWhere('o.username LIKE :username')
+                $qb = $qb->andWhere('u.username LIKE :username')
                     ->setParameter('username', '%'.$form->get('username')->getData().'%');
             }
         }
@@ -198,23 +199,23 @@ class SearchUserFormHelper {
         if ($form->get('email')->getData()){
             $list  = explode(',',$form->get('email')->getData());
             if (count($list)>1){
-                $qb = $qb->andWhere('b.email IN (:emails)')
+                $qb = $qb->andWhere('u.email IN (:emails)')
                     ->setParameter('emails', $list);
             }else{
-                $qb = $qb->andWhere('b.email LIKE :email')
+                $qb = $qb->andWhere('u.email LIKE :email')
                     ->setParameter('email', '%'.$form->get('email')->getData().'%');
             }
         }
-        $join_roles = false;
-        if ($form->get('roles')->getData() && count($form->get('roles')->getData())){
-            if (($form->get('or_and_exp_roles')->getData() > 1) && (count($form->get('roles')->getData()) > 1)){ //AND not OR
-                $roles = $form->get('roles')->getData();
+        $join_formations = false;
+        if ($form->get('formations')->getData() && count($form->get('formations')->getData())){
+            if (($form->get('or_and_exp_formations')->getData() > 1) && (count($form->get('formations')->getData()) > 1)){ //AND not OR
+                $formations = $form->get('formations')->getData();
                 $ids_groups = array();
-                foreach ($roles as $role){
+                foreach ($formations as $formation){
                     $tmp_qb = clone $qb;
-                    $tmp_qb = $tmp_qb->leftjoin("b.roles", "ro")->addSelect("ro")
+                    $tmp_qb = $tmp_qb->leftjoin("b.formations", "ro")->addSelect("ro")
                         ->andWhere('ro.id IN (:rid)')
-                        ->setParameter('rid',$role );
+                        ->setParameter('rid',$formation );
                     $ids_groups[] = $tmp_qb->select('DISTINCT o.id')->getQuery()->getArrayResult();
                 }
                 $ids = $ids_groups[0];
@@ -226,13 +227,13 @@ class SearchUserFormHelper {
                     }
                     $ids = $ids_groups[$i];
                 }
-                $qb = $qb->andWhere('o.id IN (:all_roles)')
-                    ->setParameter('all_roles', $ids);
+                $qb = $qb->andWhere('o.id IN (:all_formations)')
+                    ->setParameter('all_formations', $ids);
             }else{
-                $qb = $qb->leftjoin("b.roles", "ro")->addSelect("ro")
+                $qb = $qb->leftjoin("b.formations", "ro")->addSelect("ro")
                     ->andWhere('ro.id IN (:rids)')
-                    ->setParameter('rids',$form->get('roles')->getData() );
-                $join_roles = true;
+                    ->setParameter('rids',$form->get('formations')->getData() );
+                $join_formations = true;
             }
         }
         $join_commissions = false;
@@ -242,18 +243,18 @@ class SearchUserFormHelper {
                 ->setParameter('cids',$form->get('commissions')->getData() );
             $join_commissions = true;
         }
-        if ($form->get('not_roles')->getData() && count($form->get('not_roles')->getData())){
+        if ($form->get('not_formations')->getData() && count($form->get('not_formations')->getData())){
             $nrqb = clone $qb;
-            if (!$join_roles){
-                $nrqb = $nrqb->leftjoin("b.roles", "ro")->addSelect("ro")
+            if (!$join_formations){
+                $nrqb = $nrqb->leftjoin("b.formations", "ro")->addSelect("ro")
                     ->andWhere('ro.id IN (:rids)');
             }
-            $nrqb->setParameter('rids',$form->get('not_roles')->getData() );
+            $nrqb->setParameter('rids',$form->get('not_formations')->getData() );
             $subQuery = $nrqb->select('DISTINCT o.id')->getQuery()->getArrayResult();
 
             if (count($subQuery)){
-                $qb = $qb->andWhere('o.id NOT IN (:subQueryRoles)')
-                    ->setParameter('subQueryRoles', $subQuery);
+                $qb = $qb->andWhere('o.id NOT IN (:subQueryformations)')
+                    ->setParameter('subQueryformations', $subQuery);
             }
 
         }
@@ -267,8 +268,8 @@ class SearchUserFormHelper {
             $subQuery = $ncqb->select('DISTINCT o.id')->getQuery()->getArrayResult();
 
             if (count($subQuery)){
-                $qb = $qb->andWhere('o.id NOT IN (:subQueryRoles)')
-                    ->setParameter('subQueryRoles', $subQuery);
+                $qb = $qb->andWhere('o.id NOT IN (:subQueryformations)')
+                    ->setParameter('subQueryformations', $subQuery);
             }
         }
 

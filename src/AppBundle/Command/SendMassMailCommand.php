@@ -37,12 +37,8 @@ class SendMassMailCommand extends ContainerAwareCommand
         $tolerance = $input->getOption('tolerance');
         $frozen = $input->getOption('frozen');
 
-        $allowed_from_emails = array(
-            "Gestion des membres" => "membres@lelefan.org",
-            "Gestion des créneaux" => "creneaux@lelefan.org",
-            "Association l'éléfàn" => "contact@lelefan.org",
-            "Formation l'éléfàn" => "formations@lelefan.org"
-        ); //todo put in conf (Controller/MailController.php:28)
+        $mailerService = $this->getContainer()->get('mailer_service');
+        $allowed_from_emails = $mailerService->getAllowedEmails();
 
         if (in_array($from_email,$allowed_from_emails)){
             $from = array($from_email => array_search($from_email, $allowed_from_emails));
@@ -69,11 +65,8 @@ class SendMassMailCommand extends ContainerAwareCommand
             $body = $template->render(array());*/
         }
         $em = $this->getContainer()->get('doctrine')->getManager();
-        $qb = $em->getRepository("AppBundle:User")->createQueryBuilder('o');
-        $qb = $qb->leftJoin("o.beneficiaries", "b")->addSelect("b")
-            ->leftJoin("o.lastRegistration", "lr")->addSelect("lr")
-            ->leftJoin("o.registrations", "r")->addSelect("r");
-        $qb = $qb->andWhere('o.member_number > 0'); //do not include admin user
+        $qb = $em->getRepository("AppBundle:Membership")->createQueryBuilder('o');
+        $qb = $qb->leftJoin("o.lastRegistration", "lr")->addSelect("lr");
         $qb = $qb->andWhere('o.withdrawn = 0'); //do not include withdrawn
         if (!$frozen){
             $output->writeln('<fg=cyan;>>>></><fg=yellow;> ne pas inclure les comptes gelés </>');
@@ -95,10 +88,11 @@ class SendMassMailCommand extends ContainerAwareCommand
             $output->writeln('<fg=cyan;>>>></><fg=yellow;> tous les membres </>');
         }
 
-        $beneficiaries = $qb->getQuery()->getResult();
+        $memberships = $qb->getQuery()->getResult();
         $to = array();
-        foreach ($beneficiaries as $beneficiary){
-            $to[] = $beneficiary->getEmail();
+        foreach ($memberships as $membership){
+            foreach ($membership->getBeneficiaries() as $beneficiary)
+                $to[] = $beneficiary->getEmail();
         }
         $message = (new \Swift_Message($subject))
             ->setFrom($from)
@@ -118,6 +112,6 @@ class SendMassMailCommand extends ContainerAwareCommand
         }
         $mailer->send($message);
 
-        $output->writeln('<fg=cyan;>>>></><fg=green;> message envoyé à '.count($beneficiaries).' beneficiaires'.' </>');
+        $output->writeln('<fg=cyan;>>>></><fg=green;> message envoyé à '.count($to).' beneficiaires ('.count($memberships).' comptes membre) </>');
     }
 }

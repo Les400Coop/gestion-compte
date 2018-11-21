@@ -52,6 +52,8 @@ twig:
       due_duration_by_cycle: '%due_duration_by_cycle%'
       support_email: '%transactional_mailer_user%'
       images_tmp_dir: '%images_tmp_dir%'
+      shift_service: "@shift_service"
+
 # Doctrine Configuration
 doctrine:
   dbal:
@@ -73,6 +75,13 @@ doctrine:
     naming_strategy: doctrine.orm.naming_strategy.underscore
     auto_mapping: true
 
+doctrine_migrations:
+  dir_name: "%kernel.root_dir%/DoctrineMigrations"
+  namespace: Application\Migrations
+  table_name: migration_versions
+  name: Application Migrations
+  organize_migrations: false # Version >=1.2 Possible values are: "BY_YEAR", "BY_YEAR_AND_MONTH", false
+
 # Swiftmailer Configuration
 swiftmailer:
   transport: '%mailer_transport%'
@@ -86,6 +95,8 @@ fos_user:
   db_driver: orm # other valid values are 'mongodb' and 'couchdb'
   firewall_name: main
   user_class: AppBundle\Entity\User
+  group:
+    group_class: AppBundle\Entity\Formation
   from_email:
     address: '%transactional_mailer_user%'
     sender_name: '%transactional_mailer_user_name%'
