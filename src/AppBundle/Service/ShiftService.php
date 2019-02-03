@@ -102,8 +102,8 @@ class ShiftService
         if (!$beneficiary) {
             return true;
         }
-        // Do not book shift i do not know how to handle (formation)
-        if ($shift->getFormation() && !$beneficiary->getFormations()->contains($shift->getFormation())) {
+	// Do not book shift i do not know how to handle (formation)
+	if ($shift->getFormation() && !$beneficiary->getFormations()->contains($shift->getFormation())) {
             return false;
         }
 
@@ -114,14 +114,20 @@ class ShiftService
         if ($member->getFirstShiftDate() > $shift->getStart())
             return false;
 
-        // First shift ever of the beneficiary, check he or she is not the first one to book the bucket
+	// First shift ever of the beneficiary, check he or she is not the first one to book the bucket
+	// le code ci-dessous provoque un cercle vicieux :
+	// pour s'inscrire il ne faut pas etre beotien pour ne plus etre beotien il faut s'inscrire un jour ...
+	// on pourrait tester / formation attribuer systematiquement comme "Membre 400 coop"
+	// qqchose comme : $beneficiary->getFormations()->contains(mtion Membre 400 coop>) 
+	// en attendant je court-circuite 
+	/*
         if ($this->isBeginner($beneficiary)) {
             $shifts = $this->em->getRepository('AppBundle:Shift')->findAlreadyBookedShiftsOfBucket($shift);
             if (count($shifts) == 0) {
                 return false;
             }
         }
-
+	*/
         $current_cycle = $this->getShiftCycleIndex($shift, $member);
 
         if ($member->getFrozen()) {

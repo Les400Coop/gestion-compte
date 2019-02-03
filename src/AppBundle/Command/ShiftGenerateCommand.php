@@ -62,13 +62,16 @@ class ShiftGenerateCommand extends ContainerAwareCommand
             $qb->where('p.dayOfWeek = :dow')
                 ->setParameter('dow', $dayOfWeek)
                 ->orderBy('p.start');
-            $periods = $qb->getQuery()->getResult();
+	    $periods = $qb->getQuery()->getResult();
+	    $nbPeriods = count($periods);
+	    $output->writeln('sql='.$qb->getDql().' parals= '.$dayOfWeek.' nb periods= '.$nbPeriods);
             foreach ($periods as $period) {
                 $shift = new Shift();
                 $start = date_create_from_format('Y-m-d H:i', $date->format('Y-m-d') . ' ' . $period->getStart()->format('H:i'));
                 $shift->setStart($start);
                 $end = date_create_from_format('Y-m-d H:i', $date->format('Y-m-d') . ' ' . $period->getEnd()->format('H:i'));
                 $shift->setEnd($end);
+            $output->writeln('<fg=blue;>'.$start->format('Y-m-d H:i').'</>');
 
                 foreach ($period->getPositions() as $position) {
 
