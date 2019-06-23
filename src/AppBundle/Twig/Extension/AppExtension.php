@@ -114,7 +114,7 @@ class AppExtension extends \Twig_Extension
 
     public function date_fr_long(\DateTime $date)
     {
-        setlocale(LC_TIME, 'fr_FR.UTF8');
+        setlocale(LC_TIME, 'fr_FR.UTF8','fr.UTF8','fr_FR.UTF-8','fr_UTF-8');
         return strftime("%A %e %B", $date->getTimestamp());
     }
 

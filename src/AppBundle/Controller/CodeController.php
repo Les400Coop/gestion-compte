@@ -30,9 +30,9 @@ class CodeController extends Controller
      *
      * @Route("/", name="codes_list")
      * @Method("GET")
-     * @Security("has_role('ROLE_USER')")
-     */
-    public function listAction(Request $request){
+     * @security("has_role('ROLE_USER')")    
+     * */
+   public function listAction(Request $request){
         $session = new Session();
 
         $current_app_user = $this->get('security.token_storage')->getToken()->getUser();

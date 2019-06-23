@@ -155,9 +155,12 @@ class ShiftService
             return false;
 
         // First shift ever of the beneficiary, check he or she is not the first one to book the bucket
-        if ($this->isBeginner($beneficiary) && $this->isShiftEmpty($shift)) {
-            return false;
-        }
+        /*if ($this->isBeginner($beneficiary)) {
+            $shifts = $this->em->getRepository('AppBundle:Shift')->findAlreadyBookedShiftsOfBucket($shift);
+            if (count($shifts) == 0) {
+                return false;
+            }
+        }*/
 
         $current_cycle = $this->getShiftCycleIndex($shift, $member);
 
