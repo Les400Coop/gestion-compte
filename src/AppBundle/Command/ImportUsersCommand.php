@@ -170,6 +170,7 @@ class ImportUsersCommand extends CsvCommand
 
                         $beneficiary->setEmail($email);
                         $beneficiary->setFlying(false);
+                        $this->getContainer()->get('fos_user.user_manager')->updateCanonicalFields($beneficiary->getUser());
 
                         $em->persist($beneficiary);
                     }
