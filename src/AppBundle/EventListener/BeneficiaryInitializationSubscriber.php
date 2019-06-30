@@ -40,10 +40,12 @@ class BeneficiaryInitializationSubscriber implements EventSubscriberInterface
         $this->makeUser($event->getData());
     }
 
-    private function makeUser(Beneficiary $beneficiary){
+    private function makeUser(Beneficiary $beneficiary)
+    {
         if ($beneficiary) {
             if (!$beneficiary->getUser()) {
                 $user = new User();
+                $this->em->persist($user);
                 $beneficiary->setUser($user);
             }
 

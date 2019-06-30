@@ -168,6 +168,7 @@ class ImportUsersCommand extends CsvCommand
                         $dispatcher->dispatch(BeneficiaryCreatedEvent::NAME, new BeneficiaryCreatedEvent($beneficiary));
 
                         $beneficiary->setEmail($email);
+                        $this->getContainer()->get('fos_user.user_manager')->updateCanonicalFields($beneficiary->getUser());
 
                         $em->persist($beneficiary);
                     }
