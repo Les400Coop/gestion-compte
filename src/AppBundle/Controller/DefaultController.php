@@ -161,6 +161,54 @@ class DefaultController extends Controller
 
 
     /**
+     * @Route("/check", name="check")
+     * @Method({"POST","GET"})
+     */
+    public function checkAction(Request $request)
+    {
+        $session = new Session();
+        $code = $request->get('swipe_code');
+        if (!$code) {
+            return $this->redirectToRoute('cardReader');
+        }
+        $em = $this->getDoctrine()->getManager();
+        if (strlen($code) == 12) {
+           $code = "0".$code;
+        }
+        if (!SwipeCard::checkEAN13($code)) {
+            return $this->redirectToRoute('cardReader');
+        }
+        $code = substr($code, 0, -1); //remove controle
+        $card = $em->getRepository('AppBundle:SwipeCard')->findOneBy(array('code' => $code, 'enable' => 1));
+        if (!$card) {
+            $session->getFlashBag()->add("error", "Oups, ce badge n'est pas actif ou n'existe pas");
+        } else {
+            $beneficiary = $card->getBeneficiary();
+            $counter = $beneficiary->getMembership()->getTimeCount($beneficiary->getMembership()->endOfCycle(0));
+            if ($this->swipeCardLogging) {
+                $dispatcher = $this->get('event_dispatcher');
+                $dispatcher->dispatch(SwipeCardEvent::SWIPE_CARD_SCANNED, new SwipeCardEvent($counter));
+            }
+            $shifts = $em->getRepository('AppBundle:Shift')->getOnGoingShifts($beneficiary);
+            $dispatcher = $this->get('event_dispatcher');
+            foreach ($shifts as $shift) {
+                if ($shift->getWasCarriedOut() == 0) {
+                    $shift->validateShiftParticipation();
+                    $em->persist($shift);
+                    $em->flush();
+                    $dispatcher->dispatch(ShiftValidatedEvent::NAME, new ShiftValidatedEvent($shift, $beneficiary->getMembership()));
+                }
+            }
+            return $this->render('user/check.html.twig', [
+                'beneficiary' => $beneficiary,
+                'counter' => $counter
+            ]);
+        }
+
+        return $this->redirectToRoute('cardReader');
+    }
+
+    /**
      * @Route("/helloassoNotify", name="helloasso_notify", methods={"POST"})
      * inspiré de
      * https://github.com/Breizhicoop/HelloDoli/blob/master/adhesion.php
