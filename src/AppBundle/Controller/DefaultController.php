@@ -206,6 +206,9 @@ class DefaultController extends Controller
             return $this->redirectToRoute('cardReader');
         }
         $em = $this->getDoctrine()->getManager();
+        if (strlen($code) == 12) {
+           $code = "0".$code;
+        }
         if (!SwipeCard::checkEAN13($code)) {
             return $this->redirectToRoute('cardReader');
         }
