@@ -253,6 +253,57 @@ class ShiftRepository extends \Doctrine\ORM\EntityRepository
             ->getResult();
     }
 
+    public function findInProgress()
+    {
+        $now = new \DateTime('now');
+
+        $qb = $this->createQueryBuilder('s');
+
+        $qb
+            ->where('s.shifter is not null')
+            ->andwhere(':date between s.start and s.end')
+            ->setParameter('date', $now)
+            ->orderBy('s.start', 'ASC');
+
+        return $qb
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function findUpcomingToday()
+    {
+        $now = new \DateTime('now');
+        $end_of_day = new \DateTime('now');
+        $end_of_day->setTime(23, 59, 59);
+
+        $qb = $this->createQueryBuilder('s');
+
+        $qb
+            ->andwhere('s.start > :now AND s.end < :end_of_day')
+            ->setParameter('now', $now)
+            ->setParameter('end_of_day', $end_of_day)
+            ->orderBy('s.start', 'ASC');
+
+        return $qb
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function getOngoingShifts($beneficiary)
+    {
+        $qb = $this->createQueryBuilder('s')
+            ->where('s.end > :now')
+            ->andwhere('s.start < :now_plus_ten')
+            ->andwhere('s.shifter = :sid')
+            ->setParameter('now', new \Datetime('now'))
+            ->setParameter('now_plus_ten', new \Datetime('now +10 minutes'))
+            ->setParameter('sid', $beneficiary->getId());
+
+        return $qb
+            ->getQuery()
+            ->getResult();
+    }
+
     public function getYears()
     {
         $qb = $this->createQueryBuilder('s')
